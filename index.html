@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#080810">
+  <title>Command Deck</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+  <style>
+    :root {
+      --bg: #080810;
+      --surface: #0f0f1a;
+      --card: #151525;
+      --card-hover: #1a1a2e;
+      --border: rgba(255,255,255,0.06);
+      --text: #e8e8f0;
+      --text-dim: #8888aa;
+      --text-muted: #555570;
+      --accent: #00d4aa;
+      --accent-dim: rgba(0,212,170,0.12);
+      --accent-glow: rgba(0,212,170,0.3);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245,158,11,0.12);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.12);
+      --radius: 14px;
+      --radius-sm: 8px;
+      --font-display: 'Syne', sans-serif;
+      --font-body: 'Outfit', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      overflow: hidden;
+    }
+
+    /* ── LOGIN ── */
+    #login-screen {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100vh; gap: 28px;
+      background: radial-gradient(ellipse at 50% 40%, rgba(0,212,170,0.07) 0%, transparent 65%);
+    }
+
+    .login-logo {
+      font-family: var(--font-display);
+      font-size: 52px; font-weight: 800;
+      color: var(--accent); letter-spacing: -3px;
+    }
+
+    .login-subtitle {
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--text-muted); letter-spacing: 4px; text-transform: uppercase;
+    }
+
+    #setup-banner {
+      display: none;
+      background: var(--amber-dim);
+      border: 1px solid rgba(245,158,11,0.4);
+      border-radius: var(--radius);
+      padding: 16px 20px; max-width: 460px;
+      text-align: center; font-size: 13px;
+      color: var(--amber); line-height: 1.7;
+    }
+
+    .btn-login {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--accent); color: #000;
+      border: none; border-radius: var(--radius);
+      padding: 15px 32px;
+      font-family: var(--font-display); font-weight: 700; font-size: 15px;
+      cursor: pointer; transition: all 0.2s;
+      box-shadow: 0 4px 24px rgba(0,212,170,0.2);
+    }
+
+    .btn-login:hover {
+      background: #00f0c0; transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,212,170,0.35);
+    }
+
+    /* ── MAIN APP ── */
+    #app {
+      display: none; height: 100vh;
+      flex-direction: column; padding: 10px; gap: 8px;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .header-logo {
+      font-family: var(--font-display);
+      font-size: 18px; font-weight: 800;
+      color: var(--accent); letter-spacing: -1px;
+    }
+
+    .user-avatar {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--accent-dim); border: 2px solid var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display); font-weight: 700;
+      font-size: 11px; color: var(--accent);
+    }
+
+    .user-name { font-size: 13px; font-weight: 500; color: var(--text-dim); }
+
+    .header-spacer { flex: 1; }
+
+    .header-clock {
+      font-family: var(--font-mono); font-size: 20px;
+      font-weight: 500; color: var(--text); letter-spacing: 2px;
+    }
+
+    .header-date {
+      font-family: var(--font-mono); font-size: 11px;
+      color: var(--text-muted); letter-spacing: 1px; text-align: right;
+    }
+
+    .btn-icon {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 7px 12px;
+      color: var(--text-dim); font-family: var(--font-body);
+      font-size: 12px; cursor: pointer; transition: all 0.2s;
+    }
+
+    .btn-icon:hover { color: var(--accent); border-color: var(--accent-glow); }
+    .btn-icon.syncing .si { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── GRID ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 8px; flex: 1; overflow: hidden;
+    }
+
+    /* ── PANEL ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .panel-title {
+      font-family: var(--font-display); font-size: 12px;
+      font-weight: 700; color: var(--text);
+      text-transform: uppercase; letter-spacing: 1.5px; flex: 1;
+    }
+
+    .badge {
+      border-radius: 20px; padding: 2px 8px;
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    }
+
+    .badge-teal { background: var(--accent-dim); color: var(--accent); }
+    .badge-amber { background: var(--amber-dim); color: var(--amber); }
+    .badge-red { background: var(--red-dim); color: var(--red); }
+
+    .panel-body {
+      flex: 1; overflow-y: auto; padding: 6px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── EMAIL ITEMS ── */
+    .email-item {
+      padding: 9px 11px; border-radius: var(--radius-sm);
+      cursor: pointer; border: 1px solid transparent;
+      transition: all 0.15s; margin-bottom: 3px; position: relative;
+    }
+
+    .email-item:hover { background: var(--card); border-color: var(--border); }
+
+    .email-item.unread::before {
+      content: ''; position: absolute; left: 4px; top: 50%;
+      transform: translateY(-50%); width: 4px; height: 4px;
+      border-radius: 50%; background: var(--accent);
+    }
+
+    .email-item.unread { padding-left: 16px; }
+
+    .er1 { display: flex; align-items: center; gap: 6px; }
+
+    .e-sender {
+      font-size: 12px; font-weight: 600; color: var(--text);
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .e-time {
+      font-family: var(--font-mono); font-size: 10px;
+      color: var(--text-muted); flex-shrink: 0;
+    }
+
+    .e-subject {
+      font-size: 11px; color: var(--text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .e-preview {
+      font-size: 10px; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+
+    /* ── CALENDAR ITEMS ── */
+    .cal-item {
+      display: flex; gap: 10px; padding: 9px 11px;
+      border-radius: var(--radius-sm);
+      background: var(--card); margin-bottom: 5px;
+      border-left: 3px solid var(--accent);
+      cursor: pointer; transition: all 0.15s;
+    }
+
+    .cal-item:hover { background: var(--card-hover); }
+    .cal-item.soon { border-left-color: var(--amber); }
+    .cal-item.now { border-left-color: var(--red); background: var(--red-dim); }
+
+    .c-time {
+      font-family: var(--font-mono); font-size: 11px;
+      color: var(--text-dim); min-width: 44px; padding-top: 1px;
+    }
+
+    .c-info { flex: 1; }
+
+    .c-title {
+      font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 2px;
+    }
+
+    .c-meta {
+      font-size: 10px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .c-join {
+      color: var(--accent); text-decoration: none; font-weight: 600;
+    }
+
+    /* ── FOLLOW-UPS ── */
+    .fu-add {
+      display: flex; gap: 6px; padding: 7px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+
+    .fu-input {
+      flex: 1; background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 7px 11px;
+      color: var(--text); font-family: var(--font-body);
+      font-size: 12px; outline: none; transition: border-color 0.2s;
+    }
+
+    .fu-input:focus { border-color: var(--accent); }
+    .fu-input::placeholder { color: var(--text-muted); }
+
+    .pri-sel {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 7px 6px;
+      color: var(--text); font-size: 12px; outline: none; cursor: pointer;
+    }
+
+    .btn-add {
+      background: var(--accent); color: #000; border: none;
+      border-radius: var(--radius-sm); padding: 7px 12px;
+      font-family: var(--font-display); font-weight: 700;
+      font-size: 12px; cursor: pointer; transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-add:hover { background: #00f0c0; }
+
+    .fu-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: var(--radius-sm);
+      margin-bottom: 3px; border: 1px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .fu-item:hover { background: var(--card); border-color: var(--border); }
+    .fu-item.done { opacity: 0.35; }
+
+    .fu-check {
+      width: 17px; height: 17px; border-radius: 50%;
+      border: 2px solid var(--text-muted); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; cursor: pointer; font-size: 10px;
+    }
+
+    .fu-check:hover { border-color: var(--accent); }
+    .fu-item.done .fu-check { background: var(--accent); border-color: var(--accent); color: #000; }
+
+    .fu-text {
+      flex: 1; font-size: 12px; color: var(--text); line-height: 1.4;
+    }
+
+    .fu-item.done .fu-text { text-decoration: line-through; color: var(--text-muted); }
+
+    .fu-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot-high { background: var(--red); }
+    .dot-medium { background: var(--amber); }
+    .dot-low { background: var(--accent); }
+
+    .fu-del {
+      opacity: 0; background: none; border: none;
+      color: var(--text-muted); cursor: pointer;
+      font-size: 12px; padding: 2px; transition: all 0.15s;
+    }
+
+    .fu-item:hover .fu-del { opacity: 1; }
+    .fu-del:hover { color: var(--red); }
+
+    /* ── EMAIL span ── */
+    .email-panel { grid-row: 1 / 3; }
+
+    /* ── MODAL ── */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); z-index: 100;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+
+    .overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); width: 92%; max-width: 580px;
+      max-height: 82vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .modal-head {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 18px 20px; border-bottom: 1px solid var(--border);
+    }
+
+    .modal-info { flex: 1; }
+    .modal-subject { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .modal-meta { font-size: 11px; color: var(--text-muted); }
+
+    .btn-x {
+      background: none; border: none;
+      color: var(--text-muted); font-size: 18px;
+      cursor: pointer; transition: color 0.15s; padding: 2px;
+    }
+
+    .btn-x:hover { color: var(--text); }
+
+    .modal-body {
+      flex: 1; overflow-y: auto; padding: 20px;
+      font-size: 13px; line-height: 1.75; color: var(--text-dim);
+    }
+
+    .modal-foot {
+      display: flex; gap: 8px; padding: 14px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn-fu {
+      background: var(--accent-dim); color: var(--accent);
+      border: 1px solid var(--accent-glow);
+      border-radius: var(--radius-sm); padding: 8px 16px;
+      font-family: var(--font-body); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+
+    .btn-fu:hover { background: var(--accent); color: #000; }
+
+    /* ── EMPTY / LOADING ── */
+    .empty {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; gap: 8px; color: var(--text-muted); font-size: 12px;
+    }
+
+    .empty-ico { font-size: 26px; opacity: 0.4; }
+
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: var(--text-muted);
+      font-family: var(--font-mono); font-size: 11px; gap: 8px;
+    }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; bottom: 16px; right: 16px;
+      background: var(--accent); color: #000;
+      padding: 9px 18px; border-radius: var(--radius-sm);
+      font-weight: 700; font-size: 12px; z-index: 200;
+      transform: translateY(50px); opacity: 0;
+      transition: all 0.25s; pointer-events: none;
+    }
+
+    .toast.show { transform: translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ LOGIN ═══════════════════════════════ -->
+<div id="login-screen">
+  <div style="text-align:center">
+    <div class="login-logo">⬡ CMD DECK</div>
+    <div class="login-subtitle" style="margin-top:10px">Your Personal Work Dashboard</div>
+  </div>
+
+  <div id="setup-banner">
+    ⚠️ <strong>One-time setup needed</strong><br>
+    Open <strong>index.html</strong>, find <code>YOUR_CLIENT_ID_HERE</code><br>
+    and replace it with your Azure App ID.<br>
+    Full instructions → see <strong>README.md</strong>
+  </div>
+
+  <button class="btn-login" onclick="handleLogin()">
+    <svg width="18" height="18" viewBox="0 0 23 23" fill="currentColor">
+      <path d="M1 1h10v10H1zm11 0h10v10H12zm-11 11h10v10H1zm11 0h10v10H12z"/>
+    </svg>
+    Sign in with Microsoft
+  </button>
+</div>
+
+<!-- ═══════════════════════════════ APP ═══════════════════════════════ -->
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-logo">⬡ CMD DECK</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:6px">
+      <div class="user-avatar" id="u-init">?</div>
+      <div class="user-name" id="u-name">—</div>
+    </div>
+    <div class="header-spacer"></div>
+    <div>
+      <div class="header-clock" id="clock">00:00</div>
+      <div class="header-date" id="dt"></div>
+    </div>
+    <button class="btn-icon" onclick="syncAll()" id="sync-btn">
+      <span class="si">↻</span> Sync
+    </button>
+    <button class="btn-icon" onclick="handleLogout()">Sign out</button>
+  </header>
+
+  <!-- GRID -->
+  <div class="grid">
+
+    <!-- EMAIL PANEL -->
+    <div class="panel email-panel">
+      <div class="panel-head">
+        <span>📬</span>
+        <span class="panel-title">Email Digest</span>
+        <span class="badge badge-red" id="unread-badge" style="display:none">0</span>
+      </div>
+      <div class="panel-body" id="email-panel">
+        <div class="loading"><div class="spinner"></div>Loading emails…</div>
+      </div>
+    </div>
+
+    <!-- CALENDAR PANEL -->
+    <div class="panel">
+      <div class="panel-head">
+        <span>📅</span>
+        <span class="panel-title">Today's Meetings</span>
+        <span class="badge badge-teal" id="cal-badge">0</span>
+      </div>
+      <div class="panel-body" id="cal-panel">
+        <div class="loading"><div class="spinner"></div>Loading…</div>
+      </div>
+    </div>
+
+    <!-- FOLLOW-UPS PANEL -->
+    <div class="panel">
+      <div class="panel-head">
+        <span>✅</span>
+        <span class="panel-title">Follow-ups</span>
+        <span class="badge badge-amber" id="fu-badge">0</span>
+      </div>
+      <div class="fu-add">
+        <input class="fu-input" id="fu-input" placeholder="Add a follow-up…" onkeydown="fuKey(event)">
+        <select class="pri-sel" id="pri-sel">
+          <option value="high">🔴</option>
+          <option value="medium" selected>🟡</option>
+          <option value="low">🟢</option>
+        </select>
+        <button class="btn-add" onclick="addFU()">+ Add</button>
+      </div>
+      <div class="panel-body" id="fu-panel"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- EMAIL MODAL -->
+<div class="overlay" id="modal" onclick="bgClose(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-info">
+        <div class="modal-subject" id="m-subject"></div>
+        <div class="modal-meta" id="m-meta"></div>
+      </div>
+      <button class="btn-x" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="m-body"></div>
+    <div class="modal-foot">
+      <button class="btn-fu" onclick="fuFromEmail()">+ Add as Follow-up</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════
+// CONFIG  ← Replace YOUR_CLIENT_ID_HERE after Azure setup
+// ════════════════════════════════════════════════════
+const CFG = {
+  clientId:    "YOUR_CLIENT_ID_HERE",
+  authority:   "https://login.microsoftonline.com/common",
+  redirectUri: "https://mzs-byte.github.io/work-dashboard/",
+  scopes:      ["User.Read", "Mail.Read", "Calendars.Read"]
+};
+
+// ════════════════════════════════════════════════════
+// MSAL
+// ════════════════════════════════════════════════════
+let msal_app = null, activeEmail = null;
+
+function initMsal() {
+  if (CFG.clientId === "YOUR_CLIENT_ID_HERE") {
+    document.getElementById("setup-banner").style.display = "block";
+    return false;
+  }
+  msal_app = new msal.PublicClientApplication({
+    auth: { clientId: CFG.clientId, authority: CFG.authority, redirectUri: CFG.redirectUri },
+    cache: { cacheLocation: "localStorage", storeAuthStateInCookie: true }
+  });
+  return true;
+}
+
+async function handleLogin() {
+  if (!initMsal()) return;
+  try {
+    const r = await msal_app.loginPopup({ scopes: CFG.scopes });
+    if (r) startApp(r.account);
+  } catch(e) { console.error(e); }
+}
+
+async function handleLogout() {
+  if (msal_app) { await msal_app.logoutPopup(); location.reload(); }
+}
+
+async function getToken() {
+  const accts = msal_app.getAllAccounts();
+  if (!accts.length) return null;
+  try {
+    const r = await msal_app.acquireTokenSilent({ scopes: CFG.scopes, account: accts[0] });
+    return r.accessToken;
+  } catch {
+    const r = await msal_app.acquireTokenPopup({ scopes: CFG.scopes });
+    return r.accessToken;
+  }
+}
+
+async function graph(ep) {
+  const tok = await getToken();
+  const r = await fetch("https://graph.microsoft.com/v1.0" + ep, {
+    headers: { Authorization: "Bearer " + tok }
+  });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+// ════════════════════════════════════════════════════
+// START
+// ════════════════════════════════════════════════════
+function startApp(acct) {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app").style.display = "flex";
+
+  const name = acct.name || acct.username || "User";
+  document.getElementById("u-name").textContent = name.split(" ")[0];
+  document.getElementById("u-init").textContent = name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
+
+  startClock();
+  renderFU();
+  syncAll();
+  setInterval(syncAll, 5 * 60 * 1000);
+}
+
+// ════════════════════════════════════════════════════
+// CLOCK
+// ════════════════════════════════════════════════════
+function startClock() {
+  const tick = () => {
+    const n = new Date();
+    document.getElementById("clock").textContent =
+      n.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" });
+    document.getElementById("dt").textContent =
+      n.toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" });
+  };
+  tick(); setInterval(tick, 1000);
+}
+
+// ════════════════════════════════════════════════════
+// SYNC
+// ════════════════════════════════════════════════════
+async function syncAll() {
+  const btn = document.getElementById("sync-btn");
+  btn.classList.add("syncing");
+  await Promise.all([loadEmails(), loadCalendar()]);
+  btn.classList.remove("syncing");
+}
+
+// ════════════════════════════════════════════════════
+// EMAILS
+// ════════════════════════════════════════════════════
+let emails = [];
+
+async function loadEmails() {
+  const el = document.getElementById("email-panel");
+  try {
+    const d = await graph("/me/messages?$top=25&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,isRead,bodyPreview");
+    emails = d.value || [];
+    renderEmails();
+  } catch {
+    el.innerHTML = '<div class="empty"><div class="empty-ico">⚠️</div>Could not load emails</div>';
+  }
+}
+
+function renderEmails() {
+  const el = document.getElementById("email-panel");
+  const unread = emails.filter(e => !e.isRead).length;
+  const badge = document.getElementById("unread-badge");
+  badge.textContent = unread;
+  badge.style.display = unread ? "inline-block" : "none";
+
+  if (!emails.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-ico">📭</div>Inbox is empty</div>';
+    return;
+  }
+
+  el.innerHTML = emails.map((e, i) => {
+    const sender = e.from?.emailAddress?.name || e.from?.emailAddress?.address || "Unknown";
+    return `
+      <div class="email-item ${e.isRead ? '' : 'unread'}" onclick="openEmail(${i})">
+        <div class="er1">
+          <span class="e-sender">${esc(sender)}</span>
+          <span class="e-time">${relTime(e.receivedDateTime)}</span>
+        </div>
+        <div class="e-subject">${esc(e.subject || '(no subject)')}</div>
+        <div class="e-preview">${esc(e.bodyPreview || '')}</div>
+      </div>`;
+  }).join("");
+}
+
+function openEmail(i) {
+  activeEmail = emails[i];
+  const s = activeEmail.from?.emailAddress;
+  document.getElementById("m-subject").textContent = activeEmail.subject || "(no subject)";
+  document.getElementById("m-meta").textContent =
+    `From: ${s?.name || s?.address || "?"} · ${new Date(activeEmail.receivedDateTime).toLocaleString("en-GB")}`;
+  document.getElementById("m-body").textContent = activeEmail.bodyPreview || "(no preview)";
+  document.getElementById("modal").classList.add("open");
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.remove("open");
+  activeEmail = null;
+}
+
+function bgClose(e) { if (e.target.id === "modal") closeModal(); }
+
+function fuFromEmail() {
+  if (!activeEmail) return;
+  const s = activeEmail.from?.emailAddress?.name || activeEmail.from?.emailAddress?.address || "";
+  addFUItem(`Follow up: ${activeEmail.subject || "email"}${s ? " — " + s : ""}`, "high");
+  closeModal(); toast("Follow-up added ✓");
+}
+
+// ════════════════════════════════════════════════════
+// CALENDAR
+// ════════════════════════════════════════════════════
+async function loadCalendar() {
+  const el = document.getElementById("cal-panel");
+  try {
+    const now = new Date();
+    const s = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const e = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+    const d = await graph(`/me/calendarView?startDateTime=${s}&endDateTime=${e}&$orderby=start/dateTime&$select=subject,start,end,location,onlineMeeting,webLink`);
+    renderCal(d.value || []);
+  } catch {
+    el.innerHTML = '<div class="empty"><div class="empty-ico">⚠️</div>Could not load calendar</div>';
+  }
+}
+
+function renderCal(evts) {
+  const el = document.getElementById("cal-panel");
+  document.getElementById("cal-badge").textContent = evts.length;
+
+  if (!evts.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-ico">🎉</div>No meetings today!</div>';
+    return;
+  }
+
+  const now = new Date();
+  el.innerHTML = evts.map(ev => {
+    const st  = new Date(ev.start.dateTime + (ev.start.timeZone === "UTC" ? "Z" : ""));
+    const en  = new Date(ev.end.dateTime   + (ev.end.timeZone   === "UTC" ? "Z" : ""));
+    const min = (st - now) / 60000;
+    const cls = min < 0 && now < en ? "now" : min < 30 ? "soon" : "";
+    const dur = Math.round((en - st) / 60000);
+    const join = ev.onlineMeeting?.joinUrl || ev.webLink;
+    return `
+      <div class="cal-item ${cls}">
+        <div class="c-time">${st.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</div>
+        <div class="c-info">
+          <div class="c-title">${esc(ev.subject || "Meeting")}</div>
+          <div class="c-meta">
+            ${dur}min
+            ${ev.location?.displayName ? "· " + esc(ev.location.displayName) : ""}
+            ${join ? `· <a class="c-join" href="${join}" target="_blank">Join ↗</a>` : ""}
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+// ════════════════════════════════════════════════════
+// FOLLOW-UPS  (persisted in localStorage)
+// ════════════════════════════════════════════════════
+const LS_KEY = "cmddeck_fu";
+const getFUs = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { return []; } };
+const saveFUs = d => localStorage.setItem(LS_KEY, JSON.stringify(d));
+
+function addFU() {
+  const inp = document.getElementById("fu-input");
+  const pri = document.getElementById("pri-sel").value;
+  const txt = inp.value.trim();
+  if (!txt) return;
+  addFUItem(txt, pri);
+  inp.value = "";
+}
+
+function addFUItem(txt, pri = "medium") {
+  const items = getFUs();
+  items.unshift({ id: Date.now(), txt, pri, done: false, at: new Date().toISOString() });
+  saveFUs(items); renderFU();
+}
+
+function toggleFU(id) {
+  saveFUs(getFUs().map(i => i.id === id ? {...i, done: !i.done} : i));
+  renderFU();
+}
+
+function delFU(id) {
+  saveFUs(getFUs().filter(i => i.id !== id));
+  renderFU();
+}
+
+function fuKey(e) { if (e.key === "Enter") addFU(); }
+
+function renderFU() {
+  const items = getFUs();
+  const pending = items.filter(i => !i.done).length;
+  document.getElementById("fu-badge").textContent = pending;
+
+  const el = document.getElementById("fu-panel");
+  if (!el) return;
+
+  if (!items.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-ico">✨</div>All clear — no follow-ups</div>';
+    return;
+  }
+
+  const order = {high:0, medium:1, low:2};
+  const sorted = [...items].sort((a,b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    return (order[a.pri]||1) - (order[b.pri]||1);
+  });
+
+  el.innerHTML = sorted.map(it => `
+    <div class="fu-item ${it.done ? 'done' : ''}">
+      <div class="fu-check" onclick="toggleFU(${it.id})">${it.done ? '✓' : ''}</div>
+      <div class="fu-text">${esc(it.txt)}</div>
+      <div class="fu-dot dot-${it.pri}"></div>
+      <button class="fu-del" onclick="delFU(${it.id})">✕</button>
+    </div>`).join("");
+}
+
+// ════════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════════
+function relTime(ds) {
+  const d = new Date(ds), now = new Date(), diff = (now - d) / 1000;
+  if (diff < 3600) return Math.floor(diff/60) + "m";
+  if (diff < 86400) return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+// ════════════════════════════════════════════════════
+// INIT — restore session on load
+// ════════════════════════════════════════════════════
+window.addEventListener("load", async () => {
+  if (!initMsal()) return;
+  try {
+    await msal_app.handleRedirectPromise();
+    const accts = msal_app.getAllAccounts();
+    if (accts.length) startApp(accts[0]);
+  } catch(e) { console.error(e); }
+});
+
+// Register service worker
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(console.error);
+}
+</script>
+</body>
+</html>
